@@ -73,9 +73,14 @@ class Safe {
   sprite: any
   prize: Prize
   app: any
+
+  timer: number
+  dir: number
   constructor(Num: number, position: { x: number, y: number }, app: any) {
     this.app = app
     this.open = false
+    this.timer = 0
+    this.dir = 1
 
     this.sprite = PIXI.Sprite.from(app.loader.resources["SafeClosed"].texture)
     this.sprite.anchor.set(0.5)
@@ -95,6 +100,29 @@ class Safe {
     this.label.y = position.y + Offset.y
 
     this.prize = new Prize(Math.floor(Math.random() * 4), position, app)
+  }
+
+  winState = () => {
+    this.prize.sprite.textures = this.prize.animated
+    this.prize.sprite.loop = true
+    this.prize.sprite.animationSpeed = .05
+    this.prize.sprite.play()
+
+    var Flasher = new PIXI.Ticker().add((delta: number) => {
+      this.timer += delta
+      if (this.timer >= 10) {
+        this.dir *= -1
+        this.timer = 0
+      }
+      this.prize.sprite.scale.x += (delta * this.dir) / 20
+      this.prize.sprite.scale.y += (delta * this.dir) / 20
+      if (this.prize.sprite.scale.x < 1) this.prize.sprite.scale.x = 1
+      if (this.prize.sprite.scale.y < 1) this.prize.sprite.scale.y = 1
+
+      if (this.prize.sprite.scale.x > 1.2) this.prize.sprite.scale.x = 1.2
+      if (this.prize.sprite.scale.y > 1.2) this.prize.sprite.scale.y = 1.2
+    })
+    Flasher.start()
   }
 
   openSafe = () => {
@@ -232,6 +260,8 @@ class Dial {
   safes: Array<Safe>
   winCon: boolean
 
+  amount: number
+
   constructor(position: { x: number, y: number }, dialRef: DialDisplay, mainRef: MainDisplay, safes: Array<Safe>, app: any) {
     this.winCon = false
     this.dialDisplay = dialRef
@@ -240,6 +270,9 @@ class Dial {
     this.positions = []
     this.isRotating = false
     this.selection = 0
+
+    //this is only hard coded right now because i have nothing to tie this into, but this would probably be done in initialisation and then calculated in a proper place for game logic instead of where it is now.
+    this.amount = 5
 
     this.safes = safes
     // ngl this was a pain in the backside to debug. i could probably find a more efficient method, but this is the best method that allows for numbers to change that i could think of 😴
@@ -256,7 +289,6 @@ class Dial {
         }
       })
     }
-    // console.log(this.positions)
 
     //initialise dial background
     this.dialBackground = PIXI.Sprite.from(app.loader.resources["DialBackground"].texture)
@@ -317,18 +349,18 @@ class Dial {
 
     //im putting game logic here for now because it just naturally ended up here. I dont like it and it looks messy but it works.
     this.rotateDial.add((delta: number) => {
-      // console.log("Ticker Running")
-      // console.log(this.rotateScale)
-      // console.log(this.dialFront.angle)
-      // console.log(this.dialFront.angle >= this.rotateScale - 3 && this.dialFront.angle <= this.rotateScale + 3)
 
       //If you're wondering why im rounding here, ill keep it short. Floating point errors. took me way too long to find this. 
       let mults: Array<number> = []
+      let winMult: number = 0
       if (Math.round(this.dialFront.angle) == this.rotateScale) {
         this.dialDisplay.rolls.map(i => {
           if (i == '-') return
           var x = parseInt(i) - 1
-          if (mults.includes(this.safes[x].prize.multiplier)) this.winCon = true
+          if (mults.includes(this.safes[x].prize.multiplier)) {
+            winMult = this.safes[x].prize.multiplier
+            this.winCon = true
+          }
           mults.push(this.safes[x].prize.multiplier)
         })
 
@@ -350,16 +382,11 @@ class Dial {
         this.dialFront.buttonMode = true
         this.dialSpin.visible = true
 
-        // console.log(this.dialDisplay.rolls)
         for (var i in this.dialDisplay.rolls) {
-          // console.log("Loop running")
           if (this.dialDisplay.rolls[i] == '-') break
           let n = parseInt(this.dialDisplay.rolls[i]) - 1
-
           if (this.safes[n].open) break
-
           this.safes[n].openSafe()
-
         }
 
         if (this.dialDisplay.rollCount >= 4) {
@@ -367,7 +394,6 @@ class Dial {
           this.dialSpin.visible = false
           this.dialFront.interactive = false
           this.dialFront.buttonMode = false
-          // console.log("REEEEEEE")
           this.rotateDial.stop()
         }
 
@@ -380,6 +406,16 @@ class Dial {
           this.dialFront.buttonMode = false
           this.dialSpin.visible = false
           this.dialDisplay.winState()
+
+          this.mainDisplay.setText(`You Have Won £${this.amount * winMult}`)
+          this.mainDisplay.winState()
+
+          this.safes.map(i => {
+            if (i.prize.multiplier == winMult && !i.label.visible) i.winState()
+            else i.openSafe()
+
+          })
+
           this.rotateDial.stop()
         }
 
@@ -397,8 +433,6 @@ class Dial {
       }
 
       let dir = (this.rotateScale - this.dialFront.angle) < 0 ? -1 : 1
-
-      // console.log(delta * dir);
 
       //this currently isnt really needed since gamelogic endded up in here, but its here if needed....
       this.isRotating = true
@@ -422,10 +456,8 @@ class Dial {
 
   randomSelection = () => {
     let i = Math.ceil(Math.random() * 9) - 1
-    // console.log(`${i}, ${this.dialDisplay.rolls.includes(i.toString())}`)
     while (this.selection == i || this.dialDisplay.rolls.includes((i + 1).toString())) {
       i = Math.ceil(Math.random() * 9) - 1
-      // console.log(`${i}, ${this.dialDisplay.rolls.includes(i.toString())}`)
     }
     this.selection = i
   }
@@ -435,12 +467,10 @@ class Dial {
     this.randomSelection()
 
     this.dialDisplay.rolls[this.dialDisplay.rollCount] = (this.selection + 1).toString()
-    // console.log(this.dialDisplay.rolls)
     // this.dialDisplay.updateDisplay()
 
     this.rotateScale = this.positions[this.selection].rot.forward
     this.dialDisplay.rollCount++
-    // console.log(`dial clicked ${this.rotateScale}, ${this.selection + 1}, ${this.dialDisplay.rollCount}`)
   }
 
   render = (app: any) => {
@@ -469,7 +499,9 @@ class Background {
 class MainDisplay {
   displaySprite: any
   currentMessage: any
+  timer: number
   constructor(position: { x: number, y: number }, app: any) {
+    this.timer = 0
     this.currentMessage = new PIXI.Text()
     this.currentMessage.style = new PIXI.TextStyle({
       fontFamily: 'Dimbo',
@@ -491,6 +523,17 @@ class MainDisplay {
 
   setText = (text: string) => {
     this.currentMessage.text = text
+  }
+
+  winState = () => {
+    var Flasher = new PIXI.Ticker().add((delta: number) => {
+      this.timer += delta
+      if (this.timer >= 15) {
+        this.currentMessage.visible = !this.currentMessage.visible
+        this.timer = 0
+      }
+    })
+    Flasher.start()
   }
 
   render = (app: any) => {

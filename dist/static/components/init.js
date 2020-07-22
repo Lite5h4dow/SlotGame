@@ -53,6 +53,30 @@ var Prize = /** @class */ (function () {
 var Safe = /** @class */ (function () {
     function Safe(Num, position, app) {
         var _this = this;
+        this.winState = function () {
+            _this.prize.sprite.textures = _this.prize.animated;
+            _this.prize.sprite.loop = true;
+            _this.prize.sprite.animationSpeed = .05;
+            _this.prize.sprite.play();
+            var Flasher = new PIXI.Ticker().add(function (delta) {
+                _this.timer += delta;
+                if (_this.timer >= 10) {
+                    _this.dir *= -1;
+                    _this.timer = 0;
+                }
+                _this.prize.sprite.scale.x += (delta * _this.dir) / 20;
+                _this.prize.sprite.scale.y += (delta * _this.dir) / 20;
+                if (_this.prize.sprite.scale.x < 1)
+                    _this.prize.sprite.scale.x = 1;
+                if (_this.prize.sprite.scale.y < 1)
+                    _this.prize.sprite.scale.y = 1;
+                if (_this.prize.sprite.scale.x > 1.2)
+                    _this.prize.sprite.scale.x = 1.2;
+                if (_this.prize.sprite.scale.y > 1.2)
+                    _this.prize.sprite.scale.y = 1.2;
+            });
+            Flasher.start();
+        };
         this.openSafe = function () {
             _this.label.visible = false;
             _this.sprite.texture = _this.app.loader.resources["SafeOpen"].texture;
@@ -67,6 +91,8 @@ var Safe = /** @class */ (function () {
         };
         this.app = app;
         this.open = false;
+        this.timer = 0;
+        this.dir = 1;
         this.sprite = PIXI.Sprite.from(app.loader.resources["SafeClosed"].texture);
         this.sprite.anchor.set(0.5);
         this.sprite.x = position.x;
@@ -178,21 +204,17 @@ var Dial = /** @class */ (function () {
         };
         this.randomSelection = function () {
             var i = Math.ceil(Math.random() * 9) - 1;
-            // console.log(`${i}, ${this.dialDisplay.rolls.includes(i.toString())}`)
             while (_this.selection == i || _this.dialDisplay.rolls.includes((i + 1).toString())) {
                 i = Math.ceil(Math.random() * 9) - 1;
-                // console.log(`${i}, ${this.dialDisplay.rolls.includes(i.toString())}`)
             }
             _this.selection = i;
         };
         this.dialClick = function (e) {
             _this.randomSelection();
             _this.dialDisplay.rolls[_this.dialDisplay.rollCount] = (_this.selection + 1).toString();
-            // console.log(this.dialDisplay.rolls)
             // this.dialDisplay.updateDisplay()
             _this.rotateScale = _this.positions[_this.selection].rot.forward;
             _this.dialDisplay.rollCount++;
-            // console.log(`dial clicked ${this.rotateScale}, ${this.selection + 1}, ${this.dialDisplay.rollCount}`)
         };
         this.render = function (app) {
             app.stage.addChild(_this.dialBackground);
@@ -207,6 +229,8 @@ var Dial = /** @class */ (function () {
         this.positions = [];
         this.isRotating = false;
         this.selection = 0;
+        //this is only hard coded right now because i have nothing to tie this into, but this would probably be done in initialisation and then calculated in a proper place for game logic instead of where it is now.
+        this.amount = 5;
         this.safes = safes;
         // ngl this was a pain in the backside to debug. i could probably find a more efficient method, but this is the best method that allows for numbers to change that i could think of 😴
         var dialCount = 9;
@@ -220,7 +244,6 @@ var Dial = /** @class */ (function () {
                 }
             });
         }
-        // console.log(this.positions)
         //initialise dial background
         this.dialBackground = PIXI.Sprite.from(app.loader.resources["DialBackground"].texture);
         this.dialBackground.anchor.set(0.5);
@@ -271,19 +294,18 @@ var Dial = /** @class */ (function () {
         this.rotateDial = new PIXI.Ticker();
         //im putting game logic here for now because it just naturally ended up here. I dont like it and it looks messy but it works.
         this.rotateDial.add(function (delta) {
-            // console.log("Ticker Running")
-            // console.log(this.rotateScale)
-            // console.log(this.dialFront.angle)
-            // console.log(this.dialFront.angle >= this.rotateScale - 3 && this.dialFront.angle <= this.rotateScale + 3)
             //If you're wondering why im rounding here, ill keep it short. Floating point errors. took me way too long to find this. 
             var mults = [];
+            var winMult = 0;
             if (Math.round(_this.dialFront.angle) == _this.rotateScale) {
                 _this.dialDisplay.rolls.map(function (i) {
                     if (i == '-')
                         return;
                     var x = parseInt(i) - 1;
-                    if (mults.includes(_this.safes[x].prize.multiplier))
+                    if (mults.includes(_this.safes[x].prize.multiplier)) {
+                        winMult = _this.safes[x].prize.multiplier;
                         _this.winCon = true;
+                    }
                     mults.push(_this.safes[x].prize.multiplier);
                 });
                 if (!_this.winCon && !_this.dialFront.playing) {
@@ -301,9 +323,7 @@ var Dial = /** @class */ (function () {
                 _this.dialFront.interactive = true;
                 _this.dialFront.buttonMode = true;
                 _this.dialSpin.visible = true;
-                // console.log(this.dialDisplay.rolls)
                 for (var i in _this.dialDisplay.rolls) {
-                    // console.log("Loop running")
                     if (_this.dialDisplay.rolls[i] == '-')
                         break;
                     var n = parseInt(_this.dialDisplay.rolls[i]) - 1;
@@ -315,7 +335,6 @@ var Dial = /** @class */ (function () {
                     _this.dialSpin.visible = false;
                     _this.dialFront.interactive = false;
                     _this.dialFront.buttonMode = false;
-                    // console.log("REEEEEEE")
                     _this.rotateDial.stop();
                 }
                 if (!_this.isRotating)
@@ -327,6 +346,14 @@ var Dial = /** @class */ (function () {
                     _this.dialFront.buttonMode = false;
                     _this.dialSpin.visible = false;
                     _this.dialDisplay.winState();
+                    _this.mainDisplay.setText("You Have Won \u00A3" + _this.amount * winMult);
+                    _this.mainDisplay.winState();
+                    _this.safes.map(function (i) {
+                        if (i.prize.multiplier == winMult && !i.label.visible)
+                            i.winState();
+                        else
+                            i.openSafe();
+                    });
                     _this.rotateDial.stop();
                 }
                 return;
@@ -340,7 +367,6 @@ var Dial = /** @class */ (function () {
                 return;
             }
             var dir = (_this.rotateScale - _this.dialFront.angle) < 0 ? -1 : 1;
-            // console.log(delta * dir);
             //this currently isnt really needed since gamelogic endded up in here, but its here if needed....
             _this.isRotating = true;
             _this.mainDisplay.currentMessage.text = "Spinning!";
@@ -375,10 +401,21 @@ var MainDisplay = /** @class */ (function () {
         this.setText = function (text) {
             _this.currentMessage.text = text;
         };
+        this.winState = function () {
+            var Flasher = new PIXI.Ticker().add(function (delta) {
+                _this.timer += delta;
+                if (_this.timer >= 15) {
+                    _this.currentMessage.visible = !_this.currentMessage.visible;
+                    _this.timer = 0;
+                }
+            });
+            Flasher.start();
+        };
         this.render = function (app) {
             // app.stage.addChild(this.displaySprite)
             app.stage.addChild(_this.currentMessage);
         };
+        this.timer = 0;
         this.currentMessage = new PIXI.Text();
         this.currentMessage.style = new PIXI.TextStyle({
             fontFamily: 'Dimbo',
