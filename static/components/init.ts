@@ -56,7 +56,6 @@ class Prize {
     })
     this.label.x = pos.x + Offset.x
     this.label.y = pos.y + Offset.y
-
   }
 
   render = (app: any) => {
@@ -98,8 +97,9 @@ class Safe {
     })
     this.label.x = position.x + Offset.x
     this.label.y = position.y + Offset.y
-
-    this.prize = new Prize(Math.floor(Math.random() * 4), position, app)
+    let num = Math.floor(Math.random() * 3)
+    this.prize = new Prize(num, position, app)
+    console.log(num)
   }
 
   winState = () => {
@@ -132,7 +132,7 @@ class Safe {
   }
 
   assignRandomPrize = () => {
-    let prize = Math.ceil(Math.random() * 5)
+    let prize = Math.ceil(Math.random() * 3)
   }
 
   render = (app: any) => {

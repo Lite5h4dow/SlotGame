@@ -83,7 +83,7 @@ var Safe = /** @class */ (function () {
             _this.prize.render(_this.app);
         };
         this.assignRandomPrize = function () {
-            var prize = Math.ceil(Math.random() * 5);
+            var prize = Math.ceil(Math.random() * 3);
         };
         this.render = function (app) {
             app.stage.addChild(_this.sprite);
@@ -108,7 +108,9 @@ var Safe = /** @class */ (function () {
         });
         this.label.x = position.x + Offset.x;
         this.label.y = position.y + Offset.y;
-        this.prize = new Prize(Math.floor(Math.random() * 4), position, app);
+        var num = Math.floor(Math.random() * 3);
+        this.prize = new Prize(num, position, app);
+        console.log(num);
     }
     return Safe;
 }());

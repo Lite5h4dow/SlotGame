@@ -11,7 +11,6 @@ Run VS Code
 
 Press F5 and open `http://localhost:8000/`
 
-There is a chance it wont find a match as this is 100% random.
 Refresh to start over.
 
 Typescript code in ./static/components 
